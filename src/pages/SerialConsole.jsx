@@ -1,138 +1,85 @@
-import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import HandLandmarkerComponent from "../components/HandLandmarker";
+// import Typography from '@mui/material/Typography';
 
 const SerialConsole = () => {
-  const canvasRef = useRef(null);
-  const videoRef = useRef(null);
-  const [isCameraRunning, setIsCameraRunning] = useState(false);
-  const [isSerialConnected, setIsSerialConnected] = useState(false);
-  const [serialMonitorText, setSerialMonitorText] = useState("");
-  const [loadingMessageVisible, setLoadingMessageVisible] = useState(false);
-
-  const handleResults = (results) => {
-    if (!isCameraRunning) return;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    ctx.save();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-    // Drawing hand landmarks logic here...
-    ctx.restore();
-  };
-
-  const startCamera = async () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
-      video.srcObject = stream;
-      video.play();
-      video.onloadedmetadata = () => {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        setIsCameraRunning(true);
-        processFrame();
-      };
-    });
-  };
-
-  const stopCamera = () => {
-    const video = videoRef.current;
-    const stream = video.srcObject;
-    if (stream) {
-      const tracks = stream.getTracks();
-      tracks.forEach((track) => track.stop());
-    }
-    video.srcObject = null;
-    setIsCameraRunning(false);
-  };
-
-  const processFrame = () => {
-    if (!isCameraRunning) return;
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    // Send frame to model and call handleResults...
-  };
-
-  //checkbox generation
-  const handLandmarks = Array.from({ length: 21 }, (_, i) => i);
-
-  const handleStartButtonClick = async () => {
-    if (isCameraRunning) {
-      stopCamera();
-    } else {
-      setLoadingMessageVisible(true);
-      // Initialize the model here...
-      setLoadingMessageVisible(false);
-      startCamera();
-    }
-  };
-
-  const handleConnectButtonClick = async () => {
-    if (isSerialConnected) {
-      // Disconnect serial logic...
-      setIsSerialConnected(false);
-    } else {
-      // Connect serial logic...
-      setIsSerialConnected(true);
-    }
-  };
+  const disconnectHandle = () => {};
 
   return (
-    <div className="flex h-screen font-poppins">
-      <div className="flex-grow flex justify-center items-center overflow-hidden relative transform -scale-x-100">
-        <canvas ref={canvasRef} className="w-full h-auto"></canvas>
-        {loadingMessageVisible && (
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-70 text-white p-2 rounded">
-            Please wait for the model to load
+    <div className="flex h-screen font-poppins text-white">
+      <div className="w-full h-sceen flex">
+        {/* Left portion */}
+        <div className="bg-blue-600 w-[20%] py-5 px-4 flex flex-col items-center">
+          <p className="font-semibold text-2xl">Arduino GestureSense</p>
+          <button
+            id="disconnectButton"
+            className="bg-white text-red-600 font-semibold w-64 rounded-md mt-4 mb-2 py-4"
+            onClick={disconnectHandle}
+          >
+            Diconnect
+          </button>
+          <p className="font-semibold mb-3">Status: </p>
+          {/* canvas */}
+          <div className="h-[30%] w-[90%] bg-white mb-5">Canvas</div>
+          <p className="text-sm mb-2">Select any two Landmarks to track</p>
+          <p className="text-sm mb-2">Landmark: 1 (Index Finger)</p>
+          <div className="flex justify-center items-center text-sm mb-5">
+            <p className="mx-3">X: </p>
+            {/* no need of input here use p tag only with same styling */}
+            <input
+              type="number"
+              name="number"
+              className="max-w-12 rounded-sm py-1"
+            />
+            <p className="mx-3">Y: </p>
+            <input
+              type="number"
+              name="number"
+              className="max-w-12 rounded-sm py-1"
+            />
+            <p className="mx-3">Z: </p>
+            <input
+              type="number"
+              name="number"
+              className="max-w-12 rounded-sm py-1"
+            />
           </div>
-        )}
-      </div>
-
-      <div className="w-72 flex flex-col items-center p-4 bg-gray-100 shadow-lg">
-        <div className="mt-4 mb-2">
-          <strong>Select Hand Landmarks:</strong>
+          <p className="text-sm mb-2">Landmark: 8 (Thumb)</p>
+          <div className="flex justify-center items-center text-sm mb-5">
+            <p className="mx-3">X: </p>
+            <input
+              type="number"
+              name="number"
+              className="max-w-12 rounded-sm py-1"
+            />
+            <p className="mx-3">Y: </p>
+            <input
+              type="number"
+              name="number"
+              className="max-w-12 rounded-sm py-1"
+            />
+            <p className="mx-3">Z: </p>
+            <input
+              type="number"
+              name="number"
+              className="max-w-12 rounded-sm py-1"
+            />
+          </div>
+          <Link to="https://github.com/sheeeuWu/gesture-sense" target="_blank">
+            <button className="font-semibold mt-24 underline underline-offset-2">
+              Download Arduino Library
+            </button>
+          </Link>
         </div>
-
-        <div id="handLandmarkSelector" className="flex flex-wrap max-w-72">
-          {handLandmarks.map((i) => (
-            <div key={i}>
-              <label htmlFor={`hand_landmark_${i}`} className="px-1">
-                H{i}
-                <input type="checkbox" id={`hand_landmark_${i}`} value={i} />
-              </label>
-            </div>
-          ))}
-        </div>
-
-        <div className="label bg-white border border-gray-300 p-2 mt-4 overflow-auto h-36">
-          Selected Landmark JSON data will be displayed here
-        </div>
-
-        <button
-          onClick={handleStartButtonClick}
-          className={`mt-4 w-4/5 py-2 ${
-            isCameraRunning ? "bg-red-500" : "bg-green-500"
-          } text-white`}
-        >
-          {isCameraRunning ? "Stop" : "Start"}
-        </button>
-
-        <button
-          onClick={handleConnectButtonClick}
-          className={`mt-4 w-4/5 py-2 ${
-            isSerialConnected ? "bg-red-500" : "bg-green-500"
-          } text-white`}
-        >
-          {isSerialConnected ? "Disconnect" : "Connect"}
-        </button>
-
-        <div className="bg-white border border-gray-300 p-2 mt-4 h-36 overflow-auto">
-          JSON data will be displayed here
-        </div>
-
-        <div className="bg-gray-200 border border-gray-300 p-2 mt-4 h-36 overflow-auto">
-          {serialMonitorText || "Serial Monitor Output will be displayed here"}
+        {/* Right portion */}
+        <div className="w-[80%]">
+          <div>
+            <HandLandmarkerComponent />
+          </div>
+          {/* <Typography>sdfghjk</Typography> */}
+          <div className="h-16 w-full bg-[#5271FF] absolute bottom-0">
+            dfghj
+          </div>
         </div>
       </div>
     </div>
