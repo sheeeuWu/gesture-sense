@@ -1,9 +1,14 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import HandLandmarkerComponent from "../components/HandLandmarker";
+import { disconnectSerial } from "../lib/serial";
 // import Typography from '@mui/material/Typography';
 
 const SerialConsole = () => {
-  const disconnectHandle = () => {};
+  const navigate = useNavigate();
+  const disconnectHandle = async () => {
+    await disconnectSerial();
+    navigate("/");
+  };
 
   return (
     <div className="flex h-screen font-poppins text-white">
@@ -16,7 +21,7 @@ const SerialConsole = () => {
             className="bg-white text-red-600 font-semibold w-64 rounded-md mt-4 mb-2 py-4"
             onClick={disconnectHandle}
           >
-            Diconnect
+            Disconnect
           </button>
           <p className="font-semibold mb-3">Status: </p>
           {/* canvas */}

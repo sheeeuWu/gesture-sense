@@ -22,8 +22,8 @@ const HomePage = () => {
       {/* Game Series Cards */}
       <div className="w-full">
         <div className="flex flex-wrap justify-center">
-          {GameSeriesCards.map((item) => (
-            <Link to={item.page}>
+          {GameSeriesCards.map((item, index) => (
+            <Link key={index} to={item.page}>
               <GameSeriesCard game={item} />
             </Link>
           ))}
