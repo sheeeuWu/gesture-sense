@@ -1,28 +1,16 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { connectSerial, readSerial } from "../lib/serial";
 
 const HandGesturesGame = () => {
   const navigate = useNavigate();
 
   const handleConnectClick = async () => {
-    if ("serial" in navigator) {
-      try {
-        const port = await navigator.serial.requestPort();
-
-        await port.open({ baudRate: 9600 });
-
-        navigate("/serial-console");
-      } catch (error) {
-        console.error("Error connecting to serial port:", error);
-        alert(
-          "Failed to connect to the serial port. Make sure your device is connected."
-        );
-      }
-    } else {
-      alert(
-        "Web Serial API is not supported in this browser. Please try with Chrome."
-      );
-    }
+    try {
+      await connectSerial();
+      readSerial();
+      navigate("/serial-console");
+    } catch (error) { }
   };
 
   return (
