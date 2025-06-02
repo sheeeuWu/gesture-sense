@@ -1,5 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
-import { HandLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { useEffect, useRef, useState } from "react";
+import { HandLandmarker, FilesetResolver, DrawingUtils } from "@mediapipe/tasks-vision";
+import '../App.css';
+import { port, writeSerial } from "../lib/serial";
+
+let video, canvas, ctx, drawingUtils, handLandmarks = {}, videoFrameCallbackId = null;
 
 const HandLandmarkerComponent = () => {
   const videoRef = useRef(null);
@@ -8,6 +12,7 @@ const HandLandmarkerComponent = () => {
 
   // Load the model and initialize HandLandmarker
   useEffect(() => {
+    videoFrameCallbackId = null;
     async function initHandLandmarker() {
       const vision = await FilesetResolver.forVisionTasks(
         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
@@ -17,128 +22,94 @@ const HandLandmarkerComponent = () => {
         vision,
         {
           baseOptions: {
-            modelAssetPath: "/models/hand_landmarker.task",
+            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+            delegate: "GPU"
           },
-          runningMode: "VIDEO",
-          numHands: 2,
+          runningMode: "IMAGE",
+          numHands: 1,
         }
       );
       setHandLandmarker(handLandmarkerInstance);
     }
     initHandLandmarker();
+    return () => {
+      if (videoFrameCallbackId) {
+        video.cancelVideoFrameCallback(videoFrameCallbackId);
+        const stream = video.srcObject;
+        if (stream) {
+          const tracks = stream.getTracks();
+          tracks.forEach(track => track.stop());
+          video.srcObject = null;
+        }
+        if (handLandmarker) {
+          handLandmarker.close();
+          setHandLandmarker(null);
+        }
+      }
+    }
   }, []);
 
   // Process video frames
-  const processVideoFrame = () => {
-    if (handLandmarker && videoRef.current) {
-      const result = handLandmarker.detectForVideo(
-        videoRef.current,
-        Date.now()
-      );
-
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d");
-
-      // Clear canvas before drawing
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      if (result && result.landmarks) {
-        result.landmarks.forEach((landmark) => {
-          const THUMB_TIP = landmark[4];
-          const INDEX_FINGER_TIP = landmark[8];
-
-          //line connecting each knuckle landmark
-          const HAND_CONNECTIONS = [
-            // Thumb
-            [0, 1],
-            [1, 2],
-            [2, 3],
-            [3, 4],
-            // Index finger
-            [0, 5],
-            [5, 6],
-            [6, 7],
-            [7, 8],
-            // Middle finger
-            [0, 9],
-            [9, 10],
-            [10, 11],
-            [11, 12],
-            // Ring finger
-            [0, 13],
-            [13, 14],
-            [14, 15],
-            [15, 16],
-            // Pinky finger
-            [0, 17],
-            [17, 18],
-            [18, 19],
-            [19, 20],
-          ];
-
-          ctx.strokeStyle = "#00FF00";
-          ctx.lineWidth = 3;
-
-          HAND_CONNECTIONS.forEach(([start, end]) => {
-            const startX = landmark[start].x * canvas.width;
-            const startY = landmark[start].y * canvas.height;
-            const endX = landmark[end].x * canvas.width;
-            const endY = landmark[end].y * canvas.height;
-
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(endX, endY);
-            ctx.stroke();
+  const processVideoFrame = async () => {
+    if (handLandmarker && video) {
+      ctx.clearRect(0, 0, 640, 480);
+      ctx.drawImage(video, 0, 0, 640, 480);
+      const result = await handLandmarker.detect(canvas);
+      if (result.landmarks.length) {
+        for (const landmarks of result.landmarks) {
+          drawingUtils.drawLandmarks(landmarks, {
+            color: '#FF0000',
+            radius: (data) => DrawingUtils.lerp(data.from.z, -0.15, 0.1, 5, 5)
           });
-
-          landmark.forEach((point) => {
-            ctx.beginPath();
-            ctx.arc(
-              point.x * canvas.width,
-              point.y * canvas.height,
-              5,
-              0,
-              2 * Math.PI
-            );
-            ctx.fillStyle = "red";
-            ctx.fill();
-          });
-
-          // console.log("All landmarks>>>", result.landmarks)
-          console.log("THUMB_TIP>>>", THUMB_TIP);
-          console.log("INDEX_FINGER_TIP>>>", INDEX_FINGER_TIP);
-        });
+          drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+          landmarks.forEach((landmark, index) => {
+            const key = `Hand0_Landmark${index}`;
+            handLandmarks[key] = {
+              x: Math.round((landmark.x + Number.EPSILON) * 100) / 100,
+              y: Math.round((landmark.y + Number.EPSILON) * 100) / 100,
+              z: Math.round((landmark.z + Number.EPSILON) * 100) / 100,
+            };
+          })
+        }
+        if (port) {
+          const toWrite = JSON.stringify(handLandmarks) + "\n";
+          await writeSerial(toWrite);
+        }
       }
+      videoFrameCallbackId = video.requestVideoFrameCallback(processVideoFrame);
     }
   };
 
   //video stream and process each frame
   useEffect(() => {
-    const video = videoRef.current;
-    if (navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices
-        .getUserMedia({ video: true })
-        .then((stream) => {
-          video.srcObject = stream;
-          video.addEventListener("loadeddata", () => {
-            setInterval(processVideoFrame, 100); // Process every 100 ms
+    if (handLandmarker) {
+      video = videoRef.current;
+      if (navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true })
+          .then((stream) => {
+            if (!video.srcObject) {
+              video.srcObject = stream;
+              video.play();
+            }
+            video.addEventListener("loadeddata", async function onVideoLoaded() {
+              canvas = canvasRef.current;
+              ctx = canvas.getContext("2d");
+              drawingUtils = new DrawingUtils(ctx);
+              processVideoFrame();
+              video.removeEventListener("loadeddata", onVideoLoaded);
+            });
+          })
+          .catch((err) => {
+            console.error("Error accessing camera: ", err);
           });
-        })
-        .catch((err) => {
-          console.error("Error accessing camera: ", err);
-        });
+      }
     }
   }, [handLandmarker]);
 
   return (
     <div>
-      <video ref={videoRef} autoPlay muted style={{ width: "100%" }} />
-      <canvas
-        ref={canvasRef}
-        width={650}
-        height={480}
-        style={{ position: "absolute", top: 0, left: 0 }}
-      />
+      <video ref={videoRef} className="videoFeed" style={{ display: "none" }} width="640" height="480" muted autoPlay />
+      <canvas ref={canvasRef} className="videoFeed" width="640" height="480" />
     </div>
   );
 };
